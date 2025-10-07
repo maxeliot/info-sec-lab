@@ -1,0 +1,49 @@
+theory DiffieHellman
+begin
+/* Unsigned Diffie-Hellman protocol:
+   A -> B : A, g^x  (x fresh)
+   B -> A : B, g^y  (y fresh) 
+   A and B compute shared key g^(x*y)     */
+
+builtins : diffie-hellman
+
+
+rule Asends:
+[Fr(~x)]
+--[]->
+[Out('g'^~x), ASent($Alice, ~x)]
+
+rule BobReceives:
+[In(gx), Fr(~y)]
+--[BobKey($Bob, gx^~y), Neq(gx, DH_neutral), Neq(gx, 'g')]->
+[Out('g'^~y), BobReceived($Bob, gx^~y)]
+
+rule Areceives:
+[In(gy), ASent($Alice, x)]
+--[AliceKey($Alice, gy^x), Neq(gy, DH_neutral), Neq(gy, 'g')]->
+[AliceReceived(gy^x)]
+
+
+restriction inequality:
+"All x y #i. Neq(x,y)@i ==> not (x=y)"
+
+
+lemma itworks:
+exists-trace "Ex #i #j A B key. BobKey(B,key)@i & AliceKey(A, key)@j"
+
+
+lemma secrecyAlice:
+"All #i A key. AliceKey(A, key)@i ==> not (Ex #j. K(key)@j)"
+
+lemma secrecyBob:
+"All #i B key. BobKey(B, key)@i ==> not (Ex #j. K(key)@j)"
+
+
+
+
+
+
+end
+
+
+
