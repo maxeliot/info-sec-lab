@@ -31,7 +31,7 @@ Work with the rules provided by the skeleton. Do not add or remove rules.
 rule RegisterPassword:
     [ Fr(~pwd) ]
     --[ RegisterPassword($C, $S, ~pwd) ]->
-    [ Password($C, $S, ~pwd) ]
+    [ !Password($C, $S, ~pwd) ]
 
 
 /*----------------*/
@@ -52,10 +52,10 @@ rule ServerRequests:
 // */
 // // Do not change the rule name
 rule ClientAuthenticates:
-    [ In('login'), Password($C, $S, pwd) ]
-    --[ClientAuthenticates($C, $S, pwd), FinishedC($C, $S, pwd),
-       Secret(pwd), AuthGiven($C, $S, pwd)]->
-    [ Out(pwd) ]
+    [ In('login'), !Password(C, S, pwd) ]
+    --[ClientAuthenticates(C, S, pwd), FinishedC(C, S, pwd),
+       Secret(pwd), AuthGiven(C, S, pwd)]->
+    [ Out(h(pwd)) ]
 
 
 // /* The following rule should be annotated by the following action facts: 
@@ -63,8 +63,10 @@ rule ClientAuthenticates:
 // */
 // // Do not change the rule name
 rule ServerValidates:
-    [In(h_pwd)]
-    --[ServerValidates($S, $C, h_pwd), FinishedS($S, $C, h_pwd), AuthSuccess($S, $C, h_pwd)]->
+    [!Password($C, $S, pwd),
+      In(h(pwd))]
+    --[ServerValidates($S, $C, pwd), FinishedS($S, $C, pwd)
+      ,AuthSuccess($S, $C, pwd)]->
     []
 
 
