@@ -55,7 +55,7 @@ rule ClientAuthenticates:
     [ In('login'), !Password(C, S, pwd) ]
     --[ClientAuthenticates(C, S, pwd), FinishedC(C, S, pwd),
        Secret(pwd), AuthGiven(C, S, pwd)]->
-    [ Out(h(pwd)) ]
+    [ Out(<C, h(pwd)>) ]
 
 
 // /* The following rule should be annotated by the following action facts: 
@@ -64,7 +64,7 @@ rule ClientAuthenticates:
 // // Do not change the rule name
 rule ServerValidates:
     [!Password($C, $S, pwd),
-      In(h(pwd))]
+      In(<$C, h(pwd)>)]
     --[ServerValidates($S, $C, pwd), FinishedS($S, $C, pwd)
       ,AuthSuccess($S, $C, pwd)]->
     []
@@ -112,7 +112,7 @@ exists-trace
 */
 // Do not change the lemma's name
 lemma secrecy:
-  "All pwd #i. Secret(pwd)@i ==> not (K(pwd)@i) "
+  "All pwd #i. Secret(pwd)@i ==> not (Ex #j. K(pwd)@j) "
 
 /* You may only use the following action facts to formulate lemma 'non_inj_auth':
 - AuthGiven
@@ -131,11 +131,14 @@ lemma non_inj_auth:
 */
 // Do not change the lemma's name
 lemma inj_auth:
-  "T"  // TODO: Replace this formula hello  
-  // "
-  // All S C pwd #i.
-  // AuthSuccess(S, C, pwd)@i ==> (Ex #j. AuthGiven(C, S, pwd)@j & j < i & (All #k. AuthSuccess(S, C, pwd)@k ==> k = i))
-  // "
+  "
+  All C S pwd #i.
+  AuthSuccess(S, C, pwd)@i
+  ==>
+  (Ex #j. AuthGiven(C, S, pwd)@j & j < i)
+  &
+  (All #k. AuthSuccess(S, C, pwd)@k ==> (#k = #i))
+  " 
 
 
 /*    End Lemmas    */
