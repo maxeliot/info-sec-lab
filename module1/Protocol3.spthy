@@ -30,7 +30,9 @@ Work with the rules provided by the skeleton. Do not add or remove rules.
 */
 // Do not change the rule name
 rule RegisterPassword:
-   /*FILL IN HERE*/
+   [ Fr(~pwd) ]
+    --[ RegisterPassword($C, $S, ~pwd) ]->
+    [ !Password($C, $S, ~pwd) ]
 
 /* The following rule should be annotated by the following action facts: 
 - LeakPassword(C, S, pwd): indicating that the password pwd between client C and server S
@@ -39,7 +41,9 @@ is leaked to the adversary.
 */
 // Do not change the rule name
 rule LeakPassword:
-   /*FILL IN HERE*/
+   [!Password(C, S, pwd)] 
+  --[LeakPassword(C, S, pwd), DictionaryAttack(pwd)]-> 
+  [Out(pwd)]
 
 
 
@@ -52,28 +56,37 @@ rule LeakPassword:
 */
 // Do not change the rule name
 rule ClientStarts:
-   /*FILL IN HERE*/
+   [Fr(~skc), !Password(C, S, pwd)]
+   --[ClientStarts(C, S, ~skc, pwd), PasswordTerm(pk(~skc), pwd)]->
+   [Out(<C, senc(pk(~skc), pwd)>), !SecretKeyC(~skc)]
 
 /* The following rule should be annotated by the following action facts: 
 - ServerReplies(S, C, pwd, sID, pkc)
 */
 // Do not change the rule name
 rule ServerReplies:
-   /*FILL IN HERE*/
+   [!Password(C, S, pwd), Fr(~sID), In(<C, senc(pkc, pwd)>)]
+   --[ServerReplies(S, C, pwd, ~sID, pkc)]->
+   [Out(aenc(~sID, pkc)), SessID(~sID)]
 
 /* The following rule should be annotated by the following action facts: 
 - ClientReceives(C, S, skc, pwd, sID)
 */
 // Do not change the rule name
 rule ClientReceives:
-   /*FILL IN HERE*/
+   [In(m), !Password(C, S, pwd), !SecretKeyC(skc)]
+   --[ClientReceives(C, S, skc, pwd, adec(m, skc)), FinishedC(C, S, pwd),
+   Secret(pwd)]->
+   [Out(h(adec(m, skc)))]
 
 /* The following rule should be annotated by the following action facts: 
 - ServerLogIn(S, C, pwd, sID)
 */
 // Do not change the rule name
 rule ServerLogIn:
-   /*FILL IN HERE*/
+   [!Password(C, S, pwd), SessID(sID), In(h(sID))]
+   --[ServerLogIn(S, C, pwd, sID), FinishedS(S, C, pwd)]->
+   []
 
 
 
@@ -124,7 +137,7 @@ exists-trace
 */
 // Do not change the lemma's name
 lemma secrecy:
-  "T"  // TODO: Replace this formula
+  "All pwd #i. Secret(pwd)@i ==> not (Ex #j. K(pwd)@j) "
 
 /* You may only use the following action facts to formulate lemma 'non_inj_auth':
 - AuthGiven

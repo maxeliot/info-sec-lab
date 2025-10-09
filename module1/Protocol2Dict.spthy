@@ -32,7 +32,9 @@ is leaked to the adversary.
 */
 // Do not change the rule name
 rule LeakPassword:
-   /*FILL IN HERE*/
+  [!Password(C, S, pwd)] 
+  --[LeakPassword(C, S, pwd), DictionaryAttack(pwd)]-> 
+  [Out(pwd)]
 
 
 /*
@@ -44,7 +46,9 @@ You can copy the following rules from your Protocol2.spthy
 */
 // Do not change the rule name
 rule RegisterPassword:
-   /*COPY FROM PROTOCOL 2*/
+   [ Fr(~pwd) ]
+    --[ RegisterPassword($C, $S, ~pwd) ]->
+    [ !Password($C, $S, ~pwd) ]
 
 
 
@@ -57,7 +61,9 @@ rule RegisterPassword:
 */
 // Do not change the rule name
 rule ServerRequests:
-   /*COPY FROM PROTOCOL 2*/
+   [Fr(~sID)]
+    --[ServerRequests($S, ~sID)]->
+    [Out(<'login', ~sID>), SessID(~sID)]
 
 
 /* The following rule should be annotated by the following action facts: 
@@ -65,7 +71,10 @@ rule ServerRequests:
 */
 // Do not change the rule name
 rule ClientAuthenticates:
-   /*COPY FROM PROTOCOL 2*/
+   [ In(<'login', sID>), !Password(C, S, pwd) ]
+    --[ClientAuthenticates(C, S, pwd, sID), FinishedC(C, S, pwd),
+       Secret(pwd), AuthGiven(C, S, sID), PasswordTerm(sID, pwd)]->
+    [ Out(<C, h(<sID, pwd>)>) ]
 
 
 /* The following rule should be annotated by the following action facts: 
@@ -73,7 +82,17 @@ rule ClientAuthenticates:
 */
 // Do not change the rule name
 rule ServerValidates:
-   /*COPY FROM PROTOCOL 2*/
+   [
+    !Password($C, $S, pwd),
+    SessID(sID),
+    In(<$C, h(<sID, pwd>)>)
+    ]
+    --[
+      ServerValidates($S, $C, pwd, sID),
+      FinishedS($S, $C, pwd),
+      AuthSuccess($S, $C, sID)
+    ]->
+    []
 
 
 /* ------------ */
@@ -126,7 +145,7 @@ You can copy the following lemmas from your Protocol2.spthy
 */
 // Do not change the lemma's name
 lemma secrecy:
-  "T"  // TODO: Replace this formula, you can copy it from Protocol 2
+  "All pwd #i. Secret(pwd)@i ==> not (Ex #j. K(pwd)@j) "
 
 /* You may only use the following action facts to formulate lemma 'non_inj_auth':
 - AuthGiven
@@ -134,7 +153,10 @@ lemma secrecy:
 */
 // Do not change the lemma's name
 lemma non_inj_auth:
-  "T"  // TODO: Replace this formula, you can copy it from Protocol 2
+  "
+  All C S sID #i.
+  AuthSuccess(S, C, sID)@i ==> (Ex #j. AuthGiven(C, S, sID)@j & j < i)
+  "
 
 
 /* You may only use the following action facts to formulate lemma 'inj_auth':
@@ -143,7 +165,14 @@ lemma non_inj_auth:
 */
 // Do not change the lemma's name
 lemma inj_auth:
-  "T"  // TODO: Replace this formula, you can copy it from Protocol 2
+  "
+  All C S sID #i.
+  AuthSuccess(S, C, sID)@i
+  ==>
+  (Ex #j. AuthGiven(C, S, sID)@j & j < i)
+  &
+  (All #k. AuthSuccess(S, C, sID)@k ==> (#k = #i))
+  "
 
 
 /*    End Lemmas    */
