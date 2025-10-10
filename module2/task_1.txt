@@ -1,0 +1,75 @@
+The protocol has two types of participants: clients and servers.1 We assume that 1 We simplify the protocol for
+this assignment and do not
+distinguish between sources
+and journalists.
+servers already received some number of messages that they now seek to dis-
+tribute to the correct clients. We ignore how these messages were submitted to the
+server. On a high-level the protocol works as follows:
+1. A client queries a server for a new message.
+2. The server chooses one of its stored messages and generates a challenge for
+that message.
+3. If the client can solve the challenge, the server releases the message to the client
+and deletes the message.
+Message Format and Key Material
+Each server controls a long-term public/private key pair used for asymmetric
+encryption. We assume a secure Public-Key Infrastructure in that clients know ev-
+ery server’s authentic public key. Each client controls a long-term public/private
+Diffie-Hellman key pair used for authentication.
+
+Messages stored at the server have three components. In the skeleton file, the
+rule Submission generates messages stored at servers.
+• Confidential message content, which we call “secrets.”
+• An ephemeral, unique Diffie-Hellman public key pk = gkE .2 2 Note that the corresponding
+ephemeral Diffie-Hellman
+private key kE is nowhere
+stored.
+• A challenge value v. The challenge value is the intended recipient’s Diffie-
+Hellman public key pkR raised to the ephemeral private key kE, i.e., v = pkkE
+R .
+By the Decisional Diffie-Hellman assumption, one cannot learn to which client
+public key the challenge value corresponds. This hides the intended recipient to
+the server.
+Protocol Flow
+The challenge-response protocol is run over a secure channel. To establish the
+secure channel, clients sample a symmetric key k at the beginning of the proto-
+col, asymmetrically encrypt k under the server’s public key, and send the corre-
+sponding ciphertext to the server. All other protocol messages are symmetrically
+encrypted under that key k.
+The challenge-response protocol is depicted in Figure 1. It starts with the client
+sending a request to the server, which then chooses one of its stored secrets x and
+associated challenge value v and ephemeral public key pk. The server then gen-
+erates a random value r and challenge c, raises the challenge value v to r, and
+symmetrically encrypts c under that value. It sends the client the encrypted chal-
+lenge and the ephemeral public key raised to r. If the client can, it will decrypt
+the challenge and respond with a hash of the challenge. When the server receives
+the correctly hashed challenge, it sends the client the previously chosen secret x.
+Whenever a server sends a secret to a client, it deletes the secret afterwards. Every
+secret can only be fetched once.-
+
+
+Your model must contain the following action facts, added to the appropriate
+rules.
+• ClientBegin(cl, s, k): The client cl starts the protocol with server s. It uses
+key k for the secure channel.
+• ServerChallenge(s, k, c, x): The server s receives a client request encrypted
+with k. It selects the secret x and samples the challenge c.
+• ClientRespond(cl, s, k, c): The client cl receives and decrypts challenge c
+from server s. The client uses key k for the secure channel.
+• ServerRelease(s, k, x): The server s receives a decrypted challenge from a
+client over a secure channel that uses key k. The server shares secret x with that
+client.
+• ClientReceive(cl, s, k, x): Client cl receives secret x from server s. The
+client uses key k for the secure channel.
+
+
+Task
+Model the challenge-response protocol (including the secure channel) as de-
+scribed above. Annotate all corresponding rules with the action facts from
+above. Our source skeleton file already provides you with rules for client and
+server key generation, and for initializing the secrets stored at the server. Use
+the !ServerPK fact for clients to access the authentic server public key. Prove the
+lemma Executability that is already included as part of the source skeleton file.
+
+Expected results
+The lemmas Executability should be automatically provable. Tamarin will
+generate a warning should you forget to include one of the required action facts

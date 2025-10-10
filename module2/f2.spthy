@@ -1,0 +1,131 @@
+theory fetching_protocol
+// Do not change the theory name. i.e. do not change the above line
+begin
+
+/** !!! DO NOT EDIT BELOW !!! */
+
+builtins: symmetric-encryption, asymmetric-encryption, diffie-hellman, hashing
+
+rule Server:
+  [ Fr(~ltk) ] --[ Server_Key($S, ~ltk) ]-> [ !Server($S, ~ltk), !ServerPK($S, pk(~ltk)), Out(pk(~ltk)) ]
+
+rule ServerCompromise:
+  [ !Server($S, ~ltk) ] --[ ServerCompromise($S) ]-> [ Out(~ltk) ]
+
+rule Client:
+  [ Fr(~ltk) ] --[ Client_Key($C, ~ltk) ]-> [ !Client($C, ~ltk), Out('g'^~ltk) ]
+
+rule ClientCompromise:
+  [ !Client($C, ~ltk) ] --[ ClientCompromise($C) ]-> [ Out(~ltk) ]
+
+rule Submission:
+  [ !Client($C, ~ltk)
+  , Fr(~eph), Fr(~secret) ]
+  --[ StoreSecret($S, $C, ~secret) ]->
+  [ !StoredSecret($S, ~secret, ('g'^~ltk)^~eph, 'g'^~eph), FetchToken(~secret)
+  , Out('g'^~eph) ]
+
+lemma Executability:
+  exists-trace
+  "Ex c s k chall sec #t1 #t2 #t3.
+        ClientBegin(c, s, k) @ #t1
+      & ServerChallenge(s, k, chall, sec) @ #t2
+      & ClientRespond(c, s, k, chall) @ #t3
+      & #t1 < #t2 & #t2 < #t3"
+    //   & ServerRelease(s, k, sec) @ #t4
+    //   & ClientReceive(c, s, k, sec) @ #t5
+    //   & #t1 < #t2 & #t2 < #t3 & #t3 < #t4 & #t4 < #t5"
+
+/** !!! DO NOT EDIT ABOVE !!! */
+
+// ...existing code...
+
+// Secure channel establishment
+rule SecureChannelInit:
+    [ !Client($C, ~ltk_c)
+    , !ServerPK($S, pk_s)
+    , Fr(~k) ]  // Fresh symmetric key for secure channel
+    --[ ClientBegin($C, $S, ~k) ]->
+    [ Out(aenc{~k}pk_s)  // Encrypt channel key with server's public key
+    , ClientChannel($C, $S, ~k) ]
+
+rule SecureChannelSetup:
+    [ In(aenc{k}pk(~ltk_s))
+    , !Server($S, ~ltk_s) ]
+    -->
+    [ ServerChannel($S, k) ]
+
+// Challenge-response protocol
+rule ClientRequest:
+    [ ClientChannel($C, $S, k) ]
+    -->
+    [ Out(senc('request', k))  // Encrypt request with channel key
+    , AwaitChallenge($C, $S, k) ]
+
+rule ServerSendChallenge:
+    [ ServerChannel($S, k)
+    , In(senc('request', k))
+    , !StoredSecret($S, secret, v, pk)  // Get stored message components
+    , Fr(~r)  // Fresh random for challenge
+    , Fr(~c) ]  // Fresh challenge
+    --[ ServerChallenge($S, k, ~c, secret) ]->
+    [ Out(senc(<'challenge', senc(~c, v^~r), pk^~r>, k))
+    , ChallengeState($S, k, ~c, secret) ]
+
+rule ClientRespond:
+    [ AwaitChallenge($C, $S, k)
+    , In(senc(<'challenge', enc_c, pk_r>, k))
+    , !Client($C, ~ltk_c)  // Get client's private key
+    , ClientChannel($C, $S, k) ]
+    --[ ClientRespond($C, $S, k, sdec(enc_c, (pk_r)^~ltk_c)) ]->
+    [ Out(senc(<'response', h(sdec(enc_c, (pk_r)^~ltk_c))>, k))  // Send hashed challenge
+    , AwaitSecret($C, $S, k) ]
+
+rule ServerRelease:
+    [ ChallengeState($S, k, c, secret)
+    , In(senc(<'response', hash>, k)) ]
+    --[ Eq(hash, h(c))  // Verify hash matches
+    , ServerRelease($S, k, secret) ]->
+    [ Out(senc(<'secret', secret>, k)) ]
+
+rule ClientReceive:
+    [ AwaitSecret($C, $S, k)
+    , In(senc(<'secret', secret>, k)) ]
+    --[ ClientReceive($C, $S, k, secret) ]->
+    [ ]  // Maintain client state
+
+// ...existing code...
+
+/*    Start Lemmas    */
+// You must write your lemmas within this section, lemmas placed before the previous line will not be graded.
+// Do not modify this line and the previous two lines.
+
+/* To formulate the following lemmas, you may only use built-in and the following action facts:
+- ClientBegin
+- ServerChallenge
+- ClientRespond
+- ServerRelease
+- ClientReceive
+- ServerCompromise
+- ClientCompromise
+- StoreSecret
+*/
+
+// Do not change the lemma's name
+lemma Secrecy:
+  "T"  // TODO: Replace this formula
+
+// Do not change the lemma's name
+lemma Agreement:
+  "T"  // TODO: Replace this formula
+
+// Do not change the lemma's name
+lemma Injectivity:
+  "T"  // TODO: Replace this formula
+
+/*    End Lemmas    */
+// Lemmas after this line will not be graded.
+// Do not modify this line and the previous two lines.
+
+// Do not add or modify ANYTHING after this line
+end

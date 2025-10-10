@@ -1,0 +1,208 @@
+#!/usr/bin/python3
+
+import sys, os, subprocess, re
+
+# Argument 1: Submission path
+# Argument 2: Tamarin path
+# Argument 3: Maude path (optional)
+
+TAMARIN_VERSION = '1.10.0'
+THEORY_SPTHY_REGEX = r'^theory (\w+).*$'
+THEORY_END_REGEX = r'^\s*end\s*'
+RESTRICTION_REGEX = r'^\s*restriction'
+
+skeletons = {}	
+
+temp = {}
+
+startLemmas = "/*    Start Lemmas    */"
+endLemmas = "/*    End Lemmas    */"
+ 
+skeletons['Protocol1'] =  [ "theory Protocol1"
+                          , "builtins: hashing"
+                          , "rule RegisterPassword:"
+                          , "rule ServerRequests:"
+                          , "rule ClientAuthenticates:"
+                          , "rule ServerValidates:"
+                          , "/*    Start Lemmas    */ // You must write your lemmas within this section, lemmas placed before the previous line will not be graded. // Do not modify this line and the previous two lines."
+                          , 'lemma executable: exists-trace "Ex #i #j C S pwd. FinishedC(C, S, pwd)@i & FinishedS(S, C, pwd)@j & not (S = C) "' 
+                          , 'lemma checkActionFactsAreAdded: exists-trace " (Ex a b c #i.   RegisterPassword(a, b, c)@i) & (Ex a #i.       ServerRequests(a)@i) & (Ex a b c #i.   ClientAuthenticates(a, b, c)@i) & (Ex a b c #i.   ServerValidates(a, b, c)@i) " '
+                          , "/*    End Lemmas    */ // Lemmas after this line will not be graded. // Do not modify this line and the previous two lines."]
+
+skeletons['Protocol2'] =    [ "theory Protocol2"
+                            , "builtins: hashing"
+                            , "rule RegisterPassword:"
+                            , "rule ServerRequests:"
+                            , "rule ClientAuthenticates:"
+                            , "rule ServerValidates:"
+                            , "/*    Start Lemmas    */ // You must write your lemmas within this section, lemmas placed before the previous line will not be graded. // Do not modify this line and the previous two lines."
+                            , 'lemma executable: exists-trace "Ex #i #j C S pwd. FinishedC(C, S, pwd)@i & FinishedS(S, C, pwd)@j & not (S = C) "' 
+                            , 'lemma checkActionFactsAreAdded: exists-trace " (Ex a b c #i.   RegisterPassword(a, b, c)@i)   & (Ex a b #i. ServerRequests(a, b)@i) & (Ex a b c d #i. ClientAuthenticates(a, b, c, d)@i) & (Ex a b c d #i. ServerValidates(a, b, c, d)@i) " '
+                            , "/*    End Lemmas    */ // Lemmas after this line will not be graded. // Do not modify this line and the previous two lines."]
+
+skeletons['Protocol2Dict'] =    [ "theory Protocol2Dict"
+                            , "builtins: hashing"
+                            , "rule LeakPassword:"
+                            , "rule RegisterPassword:"
+                            , "rule ServerRequests:"
+                            , "rule ClientAuthenticates:"
+                            , "rule ServerValidates:"
+                            , 'restriction DictOffline: "All pwd #i.  DictionaryAttack(pwd)@i ==> Ex #j s #l. PasswordTerm(s,pwd)@ j & (#j < #i) & K(s)@l & (#l < #i)"'
+                            , "/*    Start Lemmas    */ // You must write your lemmas within this section, lemmas placed before the previous line will not be graded. // Do not modify this line and the previous two lines."
+                            , 'lemma executable: exists-trace "Ex #i #j C S pwd. FinishedC(C, S, pwd)@i & FinishedS(S, C, pwd)@j & not (S = C) "' 
+                            , 'lemma checkActionFactsAreAdded: exists-trace " (Ex a b c #i.   LeakPassword(a, b, c)@i) & (Ex a b c #i.   RegisterPassword(a, b, c)@i) & (Ex a b #i.     ServerRequests(a, b)@i) & (Ex a b c d #i. ClientAuthenticates(a, b, c, d)@i) & (Ex a b c d #i. ServerValidates(a, b, c, d)@i) " '
+                            , "/*    End Lemmas    */ // Lemmas after this line will not be graded. // Do not modify this line and the previous two lines."]
+
+skeletons['Protocol3'] =    [ "theory Protocol3"
+                            , "builtins: hashing, symmetric-encryption, asymmetric-encryption"
+                            , "rule RegisterPassword:"
+                            , "rule LeakPassword:"
+                            , "rule ClientStarts:"
+                            , "rule ServerReplies:"
+                            , "rule ClientReceives:"
+                            , "rule ServerLogIn:"
+                            , 'restriction DictOffline: "All pwd #i.  DictionaryAttack(pwd)@i ==> Ex #j s #l. PasswordTerm(s,pwd)@ j & (#j < #i) & K(s)@l & (#l < #i)"'
+                            , "/*    Start Lemmas    */ // You must write your lemmas within this section, lemmas placed before the previous line will not be graded. // Do not modify this line and the previous two lines."
+                            , 'lemma checkActionFactsAreAdded: exists-trace " not (Ex a b c #i. LeakPassword(a, b, c)@i) & (Ex a b c #i.     RegisterPassword(a, b, c)@i) & (Ex a b c d #i.   ClientStarts(a, b, c, d)@i) & (Ex a b c d e #i. ServerReplies(a, b, c, d, e)@i) & (Ex a b c d e #i. ClientReceives(a, b, c, d, e)@i) & (Ex a b c d #i.   ServerLogIn(a, b, c, d)@i) " '
+                            , 'lemma executable: exists-trace "Ex #i #j C S pwd. FinishedC(C, S, pwd)@i & FinishedS(S, C, pwd)@j & not (S = C) "'
+                            , "/*    End Lemmas    */ // Lemmas after this line will not be graded. // Do not modify this line and the previous two lines."]
+# NOTE: There is a new if branch in this script that searches for restrictions.
+# Future version of this grading script should remove this branch. The branch
+# only applies to theories called "fetching_protocol"
+skeletons['fetching_protocol'] =  [ "theory fetching_protocol"
+                           , 'builtins: symmetric-encryption, asymmetric-encryption, diffie-hellman, hashing rule Server: [ Fr(~ltk) ] --[ Server_Key($S, ~ltk) ]-> [ !Server($S, ~ltk), !ServerPK($S, pk(~ltk)), Out(pk(~ltk)) ] rule ServerCompromise: [ !Server($S, ~ltk) ] --[ ServerCompromise($S) ]-> [ Out(~ltk) ] rule Client: [ Fr(~ltk) ] --[ Client_Key($C, ~ltk) ]-> [ !Client($C, ~ltk), Out(\'g\'^~ltk) ] rule ClientCompromise: [ !Client($C, ~ltk) ] --[ ClientCompromise($C) ]-> [ Out(~ltk) ] rule Submission: [ !Client($C, ~ltk) , Fr(~eph), Fr(~secret) ] --[ StoreSecret($S, $C, ~secret) ]-> [ !StoredSecret($S, ~secret, (\'g\'^~ltk)^~eph, \'g\'^~eph), FetchToken(~secret) , Out(\'g\'^~eph) ] lemma Executability: exists-trace "Ex c s k chall sec #t1 #t2 #t3 #t4 #t5. ClientBegin(c, s, k) @ #t1 & ServerChallenge(s, k, chall, sec) @ #t2 & ClientRespond(c, s, k, chall) @ #t3 & ServerRelease(s, k, sec) @ #t4 & ClientReceive(c, s, k, sec) @ #t5 & #t1 < #t2 & #t2 < #t3 & #t3 < #t4 & #t4 < #t5" /** !!! DO NOT EDIT ABOVE !!! */' 
+                           , '/*    Start Lemmas    */ // You must write your lemmas within this section, lemmas placed before the previous line will not be graded. // Do not modify this line and the previous two lines.'
+                           , '/*    End Lemmas    */ // Lemmas after this line will not be graded. // Do not modify this line and the previous two lines.'] 
+
+# Check that student provided submission path
+if len(sys.argv) < 2:
+    print('ERROR: Please provide your submission path as an argument. ')
+if len(sys.argv) < 3:
+    print('ERROR: Please provide the path to Tamarin. ')
+else :
+    submission_path = str(sys.argv[1])
+    tamarin_path = str(sys.argv[2])
+    maude_path = ""
+    maudeProvided = len(sys.argv) > 3
+    if maudeProvided:
+        maude_path = str(sys.argv[3])
+
+    #Check that Submission path exists
+    if not os.path.exists(submission_path):
+        print('ERROR: You did not provide a valid path to your submission. Please provide the path to your submission as the first argument. ')
+    else :
+        # Check that Tamarin path exists
+        if not os.path.exists(tamarin_path):
+            print("ERROR: You did not provide a valid path to Tamarin. Please provide the path to Tamarin as the second argument. You can get the path to Tamarin by the command 'which tamarin-prover'. ")
+        else :
+            # Check that the Maude path exists
+            if maudeProvided and not os.path.exists(maude_path):
+                print("ERROR: You did not provide a valid path to Maude. Please provide the path to Maude as the second argument. You can get the path to Maude by the command 'which maude'. ")
+            else:
+                errors = False
+
+                # Check Tamarin version
+                version = subprocess.run([tamarin_path, '--version'], text=True, capture_output=True)
+
+                if not version.stdout.startswith('tamarin-prover ' + TAMARIN_VERSION):
+                    print('ERROR: You are not using the release version ' + TAMARIN_VERSION + '. Make sure to test your submission against the release version ' + TAMARIN_VERSION + ' before submission. ')
+                    errors = True
+
+                # Get theory name
+                theory_name = ''
+                for line in open(submission_path).readlines():
+                    m = re.match(THEORY_SPTHY_REGEX, line)
+                    if m:
+                        theory_name = m.group(1)
+                        break
+                
+                if os.path.exists(submission_path):
+                        theory_text = open(submission_path).read()
+                        theory_lines = open(submission_path).readlines()
+                        
+                        # test that the skeleton is contained in the submission. 
+                        # This is sensitive to comments. Instruct the students to not add comments in the skeleton part.
+                        if theory_name in skeletons:
+                            for section in skeletons[theory_name]:
+                                #check, if the section is in the student's solution		
+                                if "".join(section.split()) not in "".join(theory_text.split()):
+                                        if not errors:
+                                            print("ERROR: The skeleton is not contained in your submission. Make sure that you do not change the sections marked with Do not Change. There is a change in the following section: " + section + " ")
+                                            errors = True
+                            # Check that the submission file name is the same as the theory name.
+                            if submission_path.split('/')[-1].replace(".spthy", "") != theory_name:
+                                print("ERROR: Your submission file name does not correspond to the theory name. Your submission file should be called " + theory_name + ".spthy ")
+                                errors = True
+                        else:
+                            print("ERROR: No skeleton is matching. Make sure you did not change the theory name. ")
+                            print(theory_name)
+                            errors = True
+
+                        if theory_name == 'fetching_protocol':
+                            for line in theory_lines:
+                                if re.match(RESTRICTION_REGEX, line):
+                                    print("ERROR: You used restrictions in fetching_protocol. You must not do that. ")
+                                    errors = True
+                                    break
+
+                        #Check that the 'start lemmas' comment is before the 'end lemmas' comment
+                        start_encountered = False
+                        for line in theory_lines:
+                            if endLemmas in line:
+                                if not start_encountered:
+                                    print("ERROR: You modified the skeleton: the 'end Lemmas' comment has to be after the 'start lemmas' comment. ")
+                                    errors = True
+                                break
+                            elif startLemmas in line:
+                                start_encountered = True
+
+                        # Check that nothing is added after the end keyword
+                        end_encountered = False
+                        for line in theory_lines:
+                            if not end_encountered:
+                                m = re.match(THEORY_END_REGEX, line)
+                                if m:
+                                    end_encountered = True
+                            else:
+                                if not line.strip() == "":
+                                    print("ERROR: You added text after the keyword 'end'. ")
+                                    errors = True
+                                    break
+                        if not end_encountered:
+                            print("ERROR: the keyword 'end' seems to be missing. ")
+                            errors = True                                
+                
+                #Check that we do not get warnings from Tamarin
+                tamarin_command = []
+                if maudeProvided:
+                    tamarin_command = [tamarin_path, submission_path, '--derivcheck-timeout=0', '--with-maude='+maude_path]
+                else:
+                    tamarin_command = [tamarin_path, submission_path, '--derivcheck-timeout=0']
+                
+                try:
+                    tamarin_output = subprocess.run(tamarin_command, text=True, capture_output=True, timeout=240)
+                except subprocess.TimeoutExpired as exc:
+                    print("ERROR: Opening your submission with Tamarin timed out. Maybe there is something wrong with your submission? If you cannot resolve this, contact the module's TAs.")
+
+                #Warnings are in stout, errors in stderr
+            
+                #For some students, the base line script does not find the path to maude and tamarin returns an error message. Catch this behavior:
+                if "tamarin-prover: Maude is not installed." in tamarin_output.stderr:
+                    print("ERROR: The script cannot find your Maude installation. Please provide the path to Maude as a third argument. You can get the path to Maude by the command 'which maude'. ")
+                    errors = True
+                else:
+                    #However, the new Tamarin release also outputs some "[Saturating Sources] Step 1/5". Thus: check if "summary of summaries is present"
+                    if (not ("summary of summaries:" in tamarin_output.stdout )) and tamarin_output.stderr:
+                        print("ERROR: Opening your submission with Tamarin results in an error. ")
+                        errors = True
+                    elif "WARNING: the following wellformedness checks failed!" in tamarin_output.stdout:
+                        print("ERROR: Opening your submission with Tamarin results in failing wellformedness checks. ")
+                        errors = True
+                    elif "Warning" in tamarin_output.stdout:
+                        print("ERROR: Opening your submission with Tamarin results in a Warning. ")
+                        errors = True
+
+                    if not errors:
+                        print('SUCCESS: You passed all the base line tests. You may submit your theory. ')
+                    else: 
+                        print('Make sure to resolve those errors before hand-in.')
